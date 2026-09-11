@@ -13,8 +13,17 @@ const app = express();
 const PORT = process.env.SERVER_PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 // Middleware
+const allowedOrigins = [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5000'];
 app.use(cors({
-    origin: [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, serverless same-origin)
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+        return callback(null, true); // Permissive in deployment to avoid CORS blocking across preview/prod domains
+    },
     credentials: true,
 }));
 app.use(express.json({ limit: '20mb' }));
@@ -22,6 +31,17 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 // Static file hosting for uploads (secured via download route, but available for image previews)
 const uploadDir = path.resolve(process.cwd(), 'uploads');
 app.use('/uploads', express.static(uploadDir));
+// Middleware to ensure database is initialized on serverless invocation
+app.use(async (_req, _res, next) => {
+    try {
+        await initDatabase();
+        next();
+    }
+    catch (err) {
+        console.error('Database initialization middleware error:', err);
+        next(err);
+    }
+});
 // Health check
 app.get('/api/health', (_req, res) => {
     res.json({
@@ -35,21 +55,26 @@ app.get('/api/health', (_req, res) => {
 app.use('/api', apiRouter);
 // Centralized error handling
 app.use(errorHandler);
-// Start server
-async function startServer() {
-    try {
-        await initDatabase();
-        app.listen(PORT, () => {
-            console.log(`====================================================`);
-            console.log(`  MidBridge 2.0 API Server active on http://localhost:${PORT}`);
-            console.log(`  Database Engine: ${getActiveEngine().toUpperCase()}`);
-            console.log(`  Allowed Client: ${CLIENT_URL}`);
-            console.log(`====================================================`);
-        });
+// Start server for local development
+const isServerless = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+if (!isServerless) {
+    async function startServer() {
+        try {
+            await initDatabase();
+            app.listen(PORT, () => {
+                console.log(`====================================================`);
+                console.log(`  MidBridge 2.0 API Server active on http://localhost:${PORT}`);
+                console.log(`  Database Engine: ${getActiveEngine().toUpperCase()}`);
+                console.log(`  Allowed Client: ${CLIENT_URL}`);
+                console.log(`====================================================`);
+            });
+        }
+        catch (err) {
+            console.error('Fatal Server Boot Error:', err);
+            process.exit(1);
+        }
     }
-    catch (err) {
-        console.error('Fatal Server Boot Error:', err);
-        process.exit(1);
-    }
+    startServer();
 }
-startServer();
+export { app };
+export default app;
