@@ -4,6 +4,7 @@ exports.getAllCountries = getAllCountries;
 exports.getCountryByCode = getCountryByCode;
 const db_js_1 = require("../db/db.js");
 async function getAllCountries(_req, res) {
+    console.log('[COUNTRIES] Retrieving country library records...');
     try {
         const result = await (0, db_js_1.query)(`SELECT code, name, region, flag_emoji, cover_image, popular_purposes, summary, processing_time_weeks, currency, language
        FROM countries
@@ -12,10 +13,15 @@ async function getAllCountries(_req, res) {
             ...c,
             popular_purposes: typeof c.popular_purposes === 'string' ? JSON.parse(c.popular_purposes) : c.popular_purposes,
         }));
+        console.log(`✓ [COUNTRIES] Successfully loaded ${countries.length} destination countries`);
         res.json({ countries });
     }
     catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve country library.' });
+        console.error('[COUNTRIES-ERROR] Failed to query countries:', err && err.stack ? err.stack : err);
+        res.status(500).json({
+            error: 'Failed to retrieve country library.',
+            details: err && err.message ? err.message : 'Database query error',
+        });
     }
 }
 async function getCountryByCode(req, res) {

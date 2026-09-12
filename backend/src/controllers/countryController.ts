@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { query } from '../db/db.js';
 
 export async function getAllCountries(_req: Request, res: Response): Promise<void> {
+  console.log('[COUNTRIES] Retrieving country library records...');
   try {
     const result = await query(
       `SELECT code, name, region, flag_emoji, cover_image, popular_purposes, summary, processing_time_weeks, currency, language
@@ -14,9 +15,14 @@ export async function getAllCountries(_req: Request, res: Response): Promise<voi
       popular_purposes: typeof c.popular_purposes === 'string' ? JSON.parse(c.popular_purposes) : c.popular_purposes,
     }));
 
+    console.log(`✓ [COUNTRIES] Successfully loaded ${countries.length} destination countries`);
     res.json({ countries });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to retrieve country library.' });
+    console.error('[COUNTRIES-ERROR] Failed to query countries:', err && err.stack ? err.stack : err);
+    res.status(500).json({
+      error: 'Failed to retrieve country library.',
+      details: err && err.message ? err.message : 'Database query error',
+    });
   }
 }
 

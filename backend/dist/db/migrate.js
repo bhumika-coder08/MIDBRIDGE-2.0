@@ -7,25 +7,25 @@ exports.runMigrations = runMigrations;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const db_js_1 = require("./db.js");
+const schemaSql_js_1 = require("./schemaSql.js");
 async function runMigrations() {
     await (0, db_js_1.initDatabase)();
-    const candidates = [
-        path_1.default.resolve(__dirname, 'schema.sql'),
-        path_1.default.resolve(__dirname, '..', '..', 'src', 'db', 'schema.sql'),
-        path_1.default.resolve(process.cwd(), 'src', 'db', 'schema.sql'),
-        path_1.default.resolve(process.cwd(), 'dist', 'db', 'schema.sql'),
-        path_1.default.resolve(process.cwd(), 'backend', 'src', 'db', 'schema.sql'),
-        path_1.default.resolve(process.cwd(), 'backend', 'dist', 'db', 'schema.sql'),
-    ];
-    let sql = '';
-    for (const candidate of candidates) {
-        if (fs_1.default.existsSync(candidate)) {
-            sql = fs_1.default.readFileSync(candidate, 'utf8');
-            break;
-        }
-    }
+    let sql = schemaSql_js_1.schemaSql;
     if (!sql) {
-        throw new Error('Unable to locate schema.sql in candidate paths.');
+        const candidates = [
+            path_1.default.resolve(__dirname, 'schema.sql'),
+            path_1.default.resolve(__dirname, '..', '..', 'src', 'db', 'schema.sql'),
+            path_1.default.resolve(process.cwd(), 'src', 'db', 'schema.sql'),
+            path_1.default.resolve(process.cwd(), 'dist', 'db', 'schema.sql'),
+            path_1.default.resolve(process.cwd(), 'backend', 'src', 'db', 'schema.sql'),
+            path_1.default.resolve(process.cwd(), 'backend', 'dist', 'db', 'schema.sql'),
+        ];
+        for (const candidate of candidates) {
+            if (fs_1.default.existsSync(candidate)) {
+                sql = fs_1.default.readFileSync(candidate, 'utf8');
+                break;
+            }
+        }
     }
     // Split and run SQL statements
     const statements = sql

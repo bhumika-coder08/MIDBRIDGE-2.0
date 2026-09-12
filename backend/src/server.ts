@@ -33,29 +33,52 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 // Static file hosting for uploads (secured via download route, but available for image previews)
 app.use('/uploads', express.static(uploadDir));
 
+// Global safety handlers to log exceptions in serverless without silent container drops
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL-UNCAUGHT-EXCEPTION]', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL-UNHANDLED-REJECTION]', reason);
+});
+
+// Request logger for diagnostic tracing in Vercel logs
+app.use((req, _res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.originalUrl || req.url}`);
+  next();
+});
+
 // Middleware to ensure database is initialized on serverless invocation
-app.use(async (_req, _res, next) => {
+app.use(async (req, res, next) => {
   try {
     await initDatabase();
     next();
-  } catch (err) {
-    console.error('Database initialization middleware error:', err);
-    next(err);
+  } catch (err: any) {
+    console.error('[DB-INIT-FAIL] Database initialization failed on request:', req.method, req.url, err && err.stack ? err.stack : err.message);
+    res.status(500).json({
+      error: 'Database initialization failed.',
+      message: err && err.message ? err.message : 'Unknown database error',
+      engine: getActiveEngine()
+    });
   }
 });
 
-// Health check
-app.get('/api/health', (_req, res) => {
+// Health check handler
+const healthHandler = (_req: express.Request, res: express.Response) => {
   res.json({
     status: 'ok',
     service: 'MidBridge 2.0 Mobility Infrastructure API',
     databaseEngine: getActiveEngine(),
     timestamp: new Date().toISOString(),
   });
-});
+};
 
-// Mount Main API Router
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
+app.get('/', healthHandler);
+
+// Mount Main API Router on both /api (standard path) and / (if stripped by reverse proxy / rewrite)
 app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // Centralized error handling
 app.use(errorHandler);

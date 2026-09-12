@@ -18,7 +18,7 @@ export async function seedDatabase(): Promise<void> {
     { id: 'usr-verif-001', email: 'verifier@midbridge.io', role: 'VERIFIER', name: 'MidBridge 2.0 Identity Verification Hub', nat: 'United Kingdom', cur: 'United Kingdom', dest: 'United Kingdom', purp: 'Immigration' },
   ];
 
-  for (const u of users) {
+  await Promise.all(users.map(async (u) => {
     await query(
       `INSERT INTO users (id, email, password_hash, role)
        VALUES ($1, $2, $3, $4)
@@ -45,7 +45,7 @@ export async function seedDatabase(): Promise<void> {
         'en'
       ]
     );
-  }
+  }));
 
   // 2. Seed 20 Supported Countries
   const countries = [
@@ -71,7 +71,7 @@ export async function seedDatabase(): Promise<void> {
     { code: 'IN', name: 'India', region: 'Asia', flag: '🇮🇳', img: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1200&q=80', purposes: ['Study', 'Research', 'Exchange', 'Travel'], summary: 'World\'s fastest-growing major economy, premier technical institutes (IITs, IIMs), vibrant startup ecosystem, and Study in India programs.', weeks: 3, curr: 'INR (₹)', lang: 'Hindi / English' },
   ];
 
-  for (const c of countries) {
+  await Promise.all(countries.map(async (c) => {
     await query(
       `INSERT INTO countries (code, name, region, flag_emoji, cover_image, popular_purposes, summary, processing_time_weeks, currency, language)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -132,7 +132,7 @@ export async function seedDatabase(): Promise<void> {
       }
     ];
 
-    for (const sec of contentSections) {
+    await Promise.all(contentSections.map(async (sec) => {
       const secId = `cnt-${c.code.toLowerCase()}-${sec.cat}`;
       await query(
         `INSERT INTO country_content (id, country_code, category, title, content, source_organization, source_url, last_checked)
@@ -140,8 +140,8 @@ export async function seedDatabase(): Promise<void> {
          ON CONFLICT (id) DO UPDATE SET title = $4, content = $5, source_organization = $6, source_url = $7, last_checked = $8`,
         [secId, c.code, sec.cat, sec.title, sec.content, sec.org, sec.url, '2026-03-01']
       );
-    }
-  }
+    }));
+  }));
 
   // 3. Seed Scholarships with real source metadata
   const scholarships = [
@@ -159,14 +159,14 @@ export async function seedDatabase(): Promise<void> {
     { id: 'sch-nz-manaaki', name: 'Manaaki New Zealand Scholarships', code: 'NZ', prov: 'Ministry of Foreign Affairs and Trade (MFAT)', lvl: 'Postgraduate Diploma / Master / PhD', nat: '*', field: 'Climate Change, Food Security, Renewable Energy', fund: 'Full Tuition + Stipend', dl: '2026-02-28', desc: 'Full tuition fees, a living allowance of NZ$531 per week, establishment allowance, medical insurance, and return travel tickets.', src: 'https://www.nzscholarships.govt.nz/', check: '2026-01-20' },
   ];
 
-  for (const s of scholarships) {
+  await Promise.all(scholarships.map(async (s) => {
     await query(
       `INSERT INTO scholarships (id, name, country_code, provider, level, eligible_nationalities, field, funding_type, deadline, description, official_source, last_checked)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (id) DO UPDATE SET name = $2, provider = $4, deadline = $9, description = $10, official_source = $11, last_checked = $12`,
       [s.id, s.name, s.code, s.prov, s.lvl, s.nat, s.field, s.fund, s.dl, s.desc, s.src, s.check]
     );
-  }
+  }));
 
   // 4. Seed Comprehensive Requirements Matrix (Nationality + Destination + Purpose)
   const requirementsData = [
@@ -207,14 +207,14 @@ export async function seedDatabase(): Promise<void> {
     { id: 'req-ca-std-03', dest: 'CA', purp: 'Study', cat: 'Immigration', title: 'Study Permit Application Form (IMM 1294)', desc: 'Submitted via IRCC secure online portal with biometrics and upfront medical exam where applicable.', mand: true, stage: 7, url: 'https://ircc.canada.ca' },
   ];
 
-  for (const r of requirementsData) {
+  await Promise.all(requirementsData.map(async (r) => {
     await query(
       `INSERT INTO requirements (id, nationality, destination, purpose, category, title, description, mandatory, stage_number, source_url, last_updated)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (id) DO UPDATE SET title = $6, description = $7, mandatory = $8, stage_number = $9, source_url = $10, last_updated = $11`,
       [r.id, null, r.dest, r.purp, r.cat, r.title, r.desc, r.mand, r.stage, r.url, '2026-03-01']
     );
-  }
+  }));
 
   // 5. Seed a Demo Journey for user 'usr-demo-001' (India -> Germany -> Study)
   const journeyId = 'jrn-demo-001';
@@ -241,7 +241,7 @@ export async function seedDatabase(): Promise<void> {
     { num: 12, name: 'Settling in', desc: 'University matriculation, semester ticket, and residence permit card issuance.', status: 'NOT_STARTED' },
   ];
 
-  for (const st of stages) {
+  await Promise.all(stages.map(async (st) => {
     const stId = `stg-${journeyId}-${st.num}`;
     await query(
       `INSERT INTO journey_stages (id, journey_id, stage_number, stage_name, description, status)
@@ -249,11 +249,11 @@ export async function seedDatabase(): Promise<void> {
        ON CONFLICT (id) DO UPDATE SET stage_name = $4, description = $5, status = $6`,
       [stId, journeyId, st.num, st.name, st.desc, st.status]
     );
-  }
+  }));
 
   // 7. Seed user_requirements linking requirements to the demo journey
   const deStdReqs = requirementsData.filter(r => r.dest === 'DE' && r.purp === 'Study');
-  for (const req of deStdReqs) {
+  await Promise.all(deStdReqs.map(async (req) => {
     const urId = `ur-${journeyId}-${req.id}`;
     let status = 'NOT_UPLOADED';
     if (req.id === 'req-de-std-01') status = 'UPLOADED';
@@ -267,7 +267,7 @@ export async function seedDatabase(): Promise<void> {
        ON CONFLICT (id) DO UPDATE SET status = $4, notes = $5`,
       [urId, journeyId, req.id, status, 'Tracked through MidBridge 2.0 requirement engine']
     );
-  }
+  }));
 
   // 8. Seed Notifications and Reminders for the Demo User
   const notifications = [
@@ -276,14 +276,14 @@ export async function seedDatabase(): Promise<void> {
     { id: 'notif-03', uid: 'usr-demo-001', title: 'DAAD EPOS Deadline Approaching', msg: 'The application window for DAAD EPOS closes on 31 October 2026.', cat: 'SCHOLARSHIP_REMINDER', link: '/scholarships' },
   ];
 
-  for (const n of notifications) {
+  await Promise.all(notifications.map(async (n) => {
     await query(
       `INSERT INTO notifications (id, user_id, title, message, category, link_url)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`,
       [n.id, n.uid, n.title, n.msg, n.cat, n.link]
     );
-  }
+  }));
 
   const reminders = [
     { id: 'rem-01', uid: 'usr-demo-001', jid: journeyId, title: 'Finalize Sperrkonto Blocked Account Deposit', date: '2026-06-15', cat: 'Financial' },
@@ -291,14 +291,14 @@ export async function seedDatabase(): Promise<void> {
     { id: 'rem-03', uid: 'usr-demo-001', jid: journeyId, title: 'Techniker Krankenkasse (TK) Student Insurance Confirmation', date: '2026-07-15', cat: 'Insurance' },
   ];
 
-  for (const rem of reminders) {
+  await Promise.all(reminders.map(async (rem) => {
     await query(
       `INSERT INTO reminders (id, user_id, journey_id, title, due_date, category)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`,
       [rem.id, rem.uid, rem.jid, rem.title, rem.date, rem.cat]
     );
-  }
+  }));
 
   console.log('✓ MidBridge 2.0 database successfully seeded with 20 countries, scholarships, requirements, and demo accounts!');
 }

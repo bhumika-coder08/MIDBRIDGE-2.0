@@ -9,50 +9,63 @@ const JWT_SECRET = process.env.JWT_SECRET || 'midbridge_jwt_super_secret_product
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export async function signup(req: Request, res: Response): Promise<void> {
+  console.log('[AUTH-SIGNUP] Incoming registration attempt for role:', req.body?.role || 'USER');
   try {
     const { email, password, fullName, nationality, destinationCountry, purpose, role } = req.body;
 
     if (!email || !password || !fullName) {
+      console.warn('[AUTH-SIGNUP] Validation failed: missing full name, email, or password');
       res.status(400).json({ error: 'Please provide full name, email address, and password.' });
       return;
     }
 
     // Check if user already exists
+    console.log('[AUTH-SIGNUP] Querying existing user email...');
     const existing = await query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
     if (existing.rows.length > 0) {
+      console.log('[AUTH-SIGNUP] Account already exists for email');
       res.status(409).json({ error: 'An account with this email address already exists. Please log in.' });
       return;
     }
 
     const assignedRole = ['ADMIN', 'AUTHORITY', 'UNIVERSITY', 'VERIFIER'].includes(role) ? role : 'USER';
+    console.log('[AUTH-SIGNUP] Hashing password with bcrypt...');
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = uuidv4();
 
+    console.log('[AUTH-SIGNUP] Inserting new user record...');
     await query(
       `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, $3, $4)`,
       [userId, email.toLowerCase().trim(), passwordHash, assignedRole]
     );
 
     const profileId = uuidv4();
+    console.log('[AUTH-SIGNUP] Inserting new user profile...');
     await query(
       `INSERT INTO profiles (id, user_id, full_name, nationality, current_country, destination_country, purpose)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [profileId, userId, fullName.trim(), nationality || 'India', nationality || 'India', destinationCountry || 'Germany', purpose || 'Study']
     );
 
-    await logAuditEvent({
-      userId,
-      action: 'USER_REGISTERED',
-      actorRole: assignedRole,
-      resourceType: 'users',
-      resourceId: userId,
-      ipAddress: req.ip,
-    });
+    try {
+      await logAuditEvent({
+        userId,
+        action: 'USER_REGISTERED',
+        actorRole: assignedRole,
+        resourceType: 'users',
+        resourceId: userId,
+        ipAddress: req.ip,
+      });
+    } catch (auditErr: any) {
+      console.warn('[AUTH-SIGNUP] Audit log notice:', auditErr.message);
+    }
 
+    console.log('[AUTH-SIGNUP] Generating JWT session token...');
     const token = jwt.sign({ id: userId, email: email.toLowerCase().trim(), role: assignedRole }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN as any,
     });
 
+    console.log('✓ [AUTH-SIGNUP] User successfully registered with ID:', userId);
     res.status(201).json({
       message: 'Account created successfully.',
       token,
@@ -64,8 +77,11 @@ export async function signup(req: Request, res: Response): Promise<void> {
       }
     });
   } catch (err: any) {
-    console.error('Signup error:', err);
-    res.status(500).json({ error: 'Failed to create user account. Please try again.' });
+    console.error('[AUTH-SIGNUP-ERROR] Exception during user registration:', err && err.stack ? err.stack : err);
+    res.status(500).json({
+      error: 'Failed to create user account. Please try again.',
+      details: err && err.message ? err.message : 'Unknown registration error',
+    });
   }
 }
 
