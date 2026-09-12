@@ -6,10 +6,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const backendRootDir = path.resolve(__dirname, '..', '..');
 
 export interface QueryResult<T = any> {
@@ -49,35 +45,69 @@ export async function initDatabase(): Promise<void> {
         pgPool = testPool;
         activeEngine = 'pg';
         console.log('✓ Connected to external PostgreSQL database via DATABASE_URL');
-        return;
       } catch (err: any) {
         console.warn(`! PostgreSQL connection via DATABASE_URL failed: ${err.message}. Falling back to embedded PostgreSQL (PGlite).`);
       }
     }
 
-    // Fallback to embedded persistent PostgreSQL engine (PGlite)
-    // In serverless environments (e.g. Vercel), only /tmp is writable
-    const isServerless = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-    const dataDir = isServerless
-      ? path.resolve('/tmp', 'midbridge', 'pglite')
-      : path.resolve(backendRootDir, 'data', 'pglite');
+    if (!pgPool) {
+      // Fallback to embedded persistent PostgreSQL engine (PGlite)
+      // In serverless environments (e.g. Vercel), only /tmp is writable
+      const isServerless = Boolean(
+        process.env.VERCEL ||
+        process.env.VERCEL_ENV ||
+        process.env.AWS_LAMBDA_FUNCTION_NAME ||
+        process.env.NOW_REGION
+      );
+      const dataDir = isServerless
+        ? path.resolve('/tmp', 'midbridge', 'pglite')
+        : path.resolve(backendRootDir, 'data', 'pglite');
 
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+      try {
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+      } catch (err) {
+        // Continue to in-memory fallback if directory creation fails
+      }
+
+      try {
+        const instance = new PGlite(dataDir);
+        await instance.waitReady;
+        pgliteInstance = instance;
+        activeEngine = 'pglite';
+        console.log(`✓ Initialized embedded PostgreSQL (PGlite) at ${dataDir}`);
+      } catch (err: any) {
+        console.warn(`! Persistent PGlite initialization error: ${err.message}. Initializing in-memory fallback.`);
+        const memInstance = new PGlite();
+        await memInstance.waitReady;
+        pgliteInstance = memInstance;
+        activeEngine = 'pglite';
+      }
     }
 
+    // Ensure database tables and basic seed data exist on startup
     try {
-      const instance = new PGlite(dataDir);
-      await instance.waitReady;
-      pgliteInstance = instance;
-      activeEngine = 'pglite';
-      console.log(`✓ Initialized embedded PostgreSQL (PGlite) at ${dataDir}`);
-    } catch (err: any) {
-      console.warn(`! Persistent PGlite initialization error: ${err.message}. Initializing in-memory fallback.`);
-      const memInstance = new PGlite();
-      await memInstance.waitReady;
-      pgliteInstance = memInstance;
-      activeEngine = 'pglite';
+      let hasTables = false;
+      if (activeEngine === 'pg' && pgPool) {
+        const check = await pgPool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'countries' LIMIT 1");
+        hasTables = (check.rows && check.rows.length > 0);
+      } else if (pgliteInstance) {
+        try {
+          const test = await pgliteInstance.query("SELECT 1 FROM countries LIMIT 1");
+          hasTables = Boolean(test);
+        } catch {
+          hasTables = false;
+        }
+      }
+
+      if (!hasTables) {
+        console.log('Database schema uninitialized. Running auto-bootstrap migrations and seed...');
+        const { seedDatabase } = require('./seed.js');
+        await seedDatabase();
+      }
+    } catch (bootstrapErr) {
+      console.warn('Database auto-bootstrap notice:', bootstrapErr);
     }
   })();
 

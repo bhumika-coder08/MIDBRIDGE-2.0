@@ -1,15 +1,30 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { initDatabase, query } from './db.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export async function runMigrations(): Promise<void> {
   await initDatabase();
-  const schemaPath = path.resolve(__dirname, 'schema.sql');
-  const sql = fs.readFileSync(schemaPath, 'utf8');
+  
+  const candidates = [
+    path.resolve(__dirname, 'schema.sql'),
+    path.resolve(__dirname, '..', '..', 'src', 'db', 'schema.sql'),
+    path.resolve(process.cwd(), 'src', 'db', 'schema.sql'),
+    path.resolve(process.cwd(), 'dist', 'db', 'schema.sql'),
+    path.resolve(process.cwd(), 'backend', 'src', 'db', 'schema.sql'),
+    path.resolve(process.cwd(), 'backend', 'dist', 'db', 'schema.sql'),
+  ];
+
+  let sql = '';
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      sql = fs.readFileSync(candidate, 'utf8');
+      break;
+    }
+  }
+
+  if (!sql) {
+    throw new Error('Unable to locate schema.sql in candidate paths.');
+  }
 
   // Split and run SQL statements
   const statements = sql

@@ -1,8 +1,11 @@
-import { query } from '../db/db.js';
-export async function getReceivedApplications(_req, res) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getReceivedApplications = getReceivedApplications;
+const db_js_1 = require("../db/db.js");
+async function getReceivedApplications(_req, res) {
     try {
         // Return share packages directed to institutions/admissions or all packages for university role review
-        const result = await query(`SELECT sp.*, u.email as applicant_email, p.full_name as applicant_name, p.nationality, p.destination_country, p.intended_course,
+        const result = await (0, db_js_1.query)(`SELECT sp.*, u.email as applicant_email, p.full_name as applicant_name, p.nationality, p.destination_country, p.intended_course,
               COUNT(spd.document_id) as document_count
        FROM share_packages sp
        JOIN users u ON sp.user_id = u.id

@@ -1,15 +1,20 @@
-import { v4 as uuidv4 } from 'uuid';
-import { query } from '../db/db.js';
-import { generateJourneyRequirements } from '../services/requirementEngine.js';
-import { calculateJourneyReadiness } from '../services/readinessCalculator.js';
-import { logAuditEvent } from '../middleware/audit.js';
-export async function getMobilityTwin(req, res) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getMobilityTwin = getMobilityTwin;
+exports.simulateScenario = simulateScenario;
+exports.applySimulatedScenario = applySimulatedScenario;
+const uuid_1 = require("uuid");
+const db_js_1 = require("../db/db.js");
+const requirementEngine_js_1 = require("../services/requirementEngine.js");
+const readinessCalculator_js_1 = require("../services/readinessCalculator.js");
+const audit_js_1 = require("../middleware/audit.js");
+async function getMobilityTwin(req, res) {
     try {
         const userId = req.user.id;
         // 1. Fetch Profile & Active Journey
-        const profileRes = await query(`SELECT * FROM profiles WHERE user_id = $1`, [userId]);
+        const profileRes = await (0, db_js_1.query)(`SELECT * FROM profiles WHERE user_id = $1`, [userId]);
         const profile = profileRes.rows[0] || null;
-        const journeyRes = await query(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
+        const journeyRes = await (0, db_js_1.query)(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
         const journey = journeyRes.rows[0] || null;
         if (!journey) {
             res.json({
@@ -19,25 +24,25 @@ export async function getMobilityTwin(req, res) {
             return;
         }
         // 2. Fetch User Requirements
-        const reqsRes = await query(`SELECT ur.*, r.category, r.title, r.description, r.mandatory, r.stage_number
+        const reqsRes = await (0, db_js_1.query)(`SELECT ur.*, r.category, r.title, r.description, r.mandatory, r.stage_number
        FROM user_requirements ur
        JOIN requirements r ON ur.requirement_id = r.id
        WHERE ur.journey_id = $1
        ORDER BY r.stage_number ASC`, [journey.id]);
         const requirements = reqsRes.rows;
         // 3. Fetch Vault Documents
-        const docsRes = await query(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
+        const docsRes = await (0, db_js_1.query)(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
         const documents = docsRes.rows;
         // 4. Fetch Health Documents
-        const healthDocsRes = await query(`SELECT * FROM health_documents WHERE user_id = $1`, [userId]);
+        const healthDocsRes = await (0, db_js_1.query)(`SELECT * FROM health_documents WHERE user_id = $1`, [userId]);
         const healthDocs = healthDocsRes.rows;
         // 5. Fetch Cost Plan & Funding
-        const planRes = await query(`SELECT * FROM cost_plans WHERE user_id = $1`, [userId]);
+        const planRes = await (0, db_js_1.query)(`SELECT * FROM cost_plans WHERE user_id = $1`, [userId]);
         const plan = planRes.rows[0] || null;
         let confirmedFunding = 0;
         let yearOneCost = 0;
         if (plan) {
-            const itemsRes = await query(`SELECT * FROM cost_items WHERE plan_id = $1`, [plan.id]);
+            const itemsRes = await (0, db_js_1.query)(`SELECT * FROM cost_items WHERE plan_id = $1`, [plan.id]);
             let pre = 0, first = 0, monthly = 0;
             for (const item of itemsRes.rows) {
                 const amt = parseFloat(item.estimated_amount) || 0;
@@ -49,7 +54,7 @@ export async function getMobilityTwin(req, res) {
                     monthly += amt;
             }
             yearOneCost = pre + first + (monthly * 11);
-            const fundRes = await query(`SELECT * FROM funding_sources WHERE plan_id = $1 AND status = 'AWARDED_CONFIRMED'`, [plan.id]);
+            const fundRes = await (0, db_js_1.query)(`SELECT * FROM funding_sources WHERE plan_id = $1 AND status = 'AWARDED_CONFIRMED'`, [plan.id]);
             for (const f of fundRes.rows) {
                 confirmedFunding += parseFloat(f.amount) || 0;
             }
@@ -149,7 +154,7 @@ export async function getMobilityTwin(req, res) {
         res.status(500).json({ error: 'Failed to retrieve Mobility Twin.' });
     }
 }
-export async function simulateScenario(req, res) {
+async function simulateScenario(req, res) {
     try {
         const userId = req.user.id;
         const { simulatedDestination, simulatedPurpose } = req.body;
@@ -158,14 +163,14 @@ export async function simulateScenario(req, res) {
             return;
         }
         // Get current active journey for comparison
-        const journeyRes = await query(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
+        const journeyRes = await (0, db_js_1.query)(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
         const currentJourney = journeyRes.rows[0] || null;
         const origin = currentJourney ? currentJourney.from_country : 'India';
         const currentDest = currentJourney ? currentJourney.to_country : 'Germany';
         const currentPurpose = currentJourney ? currentJourney.purpose : 'Study';
         const targetPurpose = simulatedPurpose || currentPurpose;
         // Query destination country info
-        const destRes = await query(`SELECT * FROM countries WHERE name = $1 OR code = $1 LIMIT 1`, [simulatedDestination]);
+        const destRes = await (0, db_js_1.query)(`SELECT * FROM countries WHERE name = $1 OR code = $1 LIMIT 1`, [simulatedDestination]);
         const destCountry = destRes.rows[0] || {
             name: simulatedDestination,
             code: simulatedDestination.slice(0, 2).toUpperCase(),
@@ -173,10 +178,10 @@ export async function simulateScenario(req, res) {
             avg_processing_weeks: 6,
         };
         // Query requirements for simulated destination + purpose
-        const simReqsRes = await query(`SELECT * FROM requirements WHERE destination = $1 AND purpose = $2`, [destCountry.code, targetPurpose]);
+        const simReqsRes = await (0, db_js_1.query)(`SELECT * FROM requirements WHERE destination = $1 AND purpose = $2`, [destCountry.code, targetPurpose]);
         const simulatedRequirements = simReqsRes.rows;
         // Check user's uploaded documents against simulated requirements
-        const userDocs = await query(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
+        const userDocs = await (0, db_js_1.query)(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
         const docs = userDocs.rows;
         const matchedReqs = simulatedRequirements.filter(sr => docs.some(d => d.category.toLowerCase() === sr.category.toLowerCase() || d.original_name.toLowerCase().includes(sr.title.toLowerCase().slice(0, 6))));
         const missingReqs = simulatedRequirements.filter(sr => !matchedReqs.includes(sr));
@@ -198,7 +203,7 @@ export async function simulateScenario(req, res) {
             destCode === 'US' || destCode === 'CA' ? 'Tuberculosis (TB) Screening Test' : 'Comprehensive Medical Examination',
             'National Childhood Vaccination Records',
         ];
-        const simSnapshotId = uuidv4();
+        const simSnapshotId = (0, uuid_1.v4)();
         const simSummary = {
             simulatedDestination: destCountry.name,
             simulatedPurpose: targetPurpose,
@@ -212,7 +217,7 @@ export async function simulateScenario(req, res) {
             simulatedOverallReadiness: Math.round(simDocScore * 0.5 + 25),
             healthRequirements: simHealthReqs,
         };
-        await query(`INSERT INTO mobility_simulations (id, user_id, origin_country, dest_country, purpose, simulation_name, diff_summary_json, simulated_readiness)
+        await (0, db_js_1.query)(`INSERT INTO mobility_simulations (id, user_id, origin_country, dest_country, purpose, simulation_name, diff_summary_json, simulated_readiness)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [
             simSnapshotId,
             userId,
@@ -223,7 +228,7 @@ export async function simulateScenario(req, res) {
             JSON.stringify(simSummary),
             simSummary.simulatedOverallReadiness,
         ]);
-        await logAuditEvent({
+        await (0, audit_js_1.logAuditEvent)({
             userId,
             action: 'MOBILITY_SIMULATION_RUN',
             actorRole: req.user.role,
@@ -260,7 +265,7 @@ export async function simulateScenario(req, res) {
         res.status(500).json({ error: 'Failed to run scenario simulation.' });
     }
 }
-export async function applySimulatedScenario(req, res) {
+async function applySimulatedScenario(req, res) {
     try {
         const userId = req.user.id;
         const { destination, purpose } = req.body;
@@ -269,29 +274,29 @@ export async function applySimulatedScenario(req, res) {
             return;
         }
         // 1. Find or create journey
-        const journeyRes = await query(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
+        const journeyRes = await (0, db_js_1.query)(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
         let journey = journeyRes.rows[0];
         // Find destination code
-        const countryRes = await query(`SELECT code, name FROM countries WHERE name = $1 OR code = $1 LIMIT 1`, [destination]);
+        const countryRes = await (0, db_js_1.query)(`SELECT code, name FROM countries WHERE name = $1 OR code = $1 LIMIT 1`, [destination]);
         const destName = countryRes.rows.length > 0 ? countryRes.rows[0].name : destination;
         const destCode = countryRes.rows.length > 0 ? countryRes.rows[0].code : destination.slice(0, 2).toUpperCase();
         if (journey) {
-            await query(`UPDATE journeys SET to_country = $1, purpose = $2, current_stage_number = 1, current_stage_name = 'Researching & Requirements Discovery', updated_at = CURRENT_TIMESTAMP
+            await (0, db_js_1.query)(`UPDATE journeys SET to_country = $1, purpose = $2, current_stage_number = 1, current_stage_name = 'Researching & Requirements Discovery', updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`, [destName, purpose, journey.id]);
         }
         else {
-            const newJourneyId = uuidv4();
-            await query(`INSERT INTO journeys (id, user_id, from_country, to_country, purpose, current_stage_number, current_stage_name)
+            const newJourneyId = (0, uuid_1.v4)();
+            await (0, db_js_1.query)(`INSERT INTO journeys (id, user_id, from_country, to_country, purpose, current_stage_number, current_stage_name)
          VALUES ($1, $2, 'India', $3, $4, 1, 'Researching & Requirements Discovery')`, [newJourneyId, userId, destName, purpose]);
             journey = { id: newJourneyId };
         }
         // 2. Populate requirements for new route
-        await generateJourneyRequirements(journey.id, destCode, purpose, 'India');
+        await (0, requirementEngine_js_1.generateJourneyRequirements)(journey.id, destCode, purpose, 'India');
         // 3. Update profile
-        await query(`UPDATE profiles SET destination_country = $1, purpose = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $3`, [destName, purpose, userId]);
+        await (0, db_js_1.query)(`UPDATE profiles SET destination_country = $1, purpose = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $3`, [destName, purpose, userId]);
         // 4. Recalculate readiness
-        const readiness = await calculateJourneyReadiness(journey.id);
-        await logAuditEvent({
+        const readiness = await (0, readinessCalculator_js_1.calculateJourneyReadiness)(journey.id);
+        await (0, audit_js_1.logAuditEvent)({
             userId,
             action: 'MOBILITY_SCENARIO_APPLIED',
             actorRole: req.user.role,

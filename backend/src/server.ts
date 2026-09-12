@@ -1,16 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { initDatabase, getActiveEngine } from './db/db.js';
 import { apiRouter } from './routes/api.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { uploadDir } from './middleware/upload.js';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 5000;
@@ -34,7 +31,6 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Static file hosting for uploads (secured via download route, but available for image previews)
-const uploadDir = path.resolve(process.cwd(), 'uploads');
 app.use('/uploads', express.static(uploadDir));
 
 // Middleware to ensure database is initialized on serverless invocation
@@ -65,9 +61,20 @@ app.use('/api', apiRouter);
 app.use(errorHandler);
 
 // Start server for local development
-const isServerless = process.env.VERCEL === '1' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.NOW_REGION
+);
 
-if (!isServerless) {
+// Only listen if executed directly from CLI and not in serverless runtime
+const isDirectRun =
+  !isServerless &&
+  ((typeof require !== 'undefined' && require.main === module) ||
+    Boolean(process.argv[1] && (process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.js'))));
+
+if (isDirectRun) {
   async function startServer() {
     try {
       await initDatabase();
@@ -89,3 +96,10 @@ if (!isServerless) {
 
 export { app };
 export default app;
+
+// Ensure CommonJS module.exports compatibility for AWS Lambda / Vercel Serverless Function bridges
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = app;
+  module.exports.default = app;
+  module.exports.app = app;
+}

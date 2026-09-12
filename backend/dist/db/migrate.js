@@ -1,13 +1,32 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { initDatabase, query } from './db.js';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-export async function runMigrations() {
-    await initDatabase();
-    const schemaPath = path.resolve(__dirname, 'schema.sql');
-    const sql = fs.readFileSync(schemaPath, 'utf8');
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.runMigrations = runMigrations;
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const db_js_1 = require("./db.js");
+async function runMigrations() {
+    await (0, db_js_1.initDatabase)();
+    const candidates = [
+        path_1.default.resolve(__dirname, 'schema.sql'),
+        path_1.default.resolve(__dirname, '..', '..', 'src', 'db', 'schema.sql'),
+        path_1.default.resolve(process.cwd(), 'src', 'db', 'schema.sql'),
+        path_1.default.resolve(process.cwd(), 'dist', 'db', 'schema.sql'),
+        path_1.default.resolve(process.cwd(), 'backend', 'src', 'db', 'schema.sql'),
+        path_1.default.resolve(process.cwd(), 'backend', 'dist', 'db', 'schema.sql'),
+    ];
+    let sql = '';
+    for (const candidate of candidates) {
+        if (fs_1.default.existsSync(candidate)) {
+            sql = fs_1.default.readFileSync(candidate, 'utf8');
+            break;
+        }
+    }
+    if (!sql) {
+        throw new Error('Unable to locate schema.sql in candidate paths.');
+    }
     // Split and run SQL statements
     const statements = sql
         .split(';')
@@ -15,7 +34,7 @@ export async function runMigrations() {
         .filter(s => s.length > 0);
     for (const statement of statements) {
         try {
-            await query(statement);
+            await (0, db_js_1.query)(statement);
         }
         catch (err) {
             // Ignore if table/index already exists

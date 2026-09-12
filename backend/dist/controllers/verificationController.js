@@ -1,24 +1,32 @@
-import { v4 as uuidv4 } from 'uuid';
-import crypto from 'crypto';
-import { query } from '../db/db.js';
-import { calculateJourneyReadiness } from '../services/readinessCalculator.js';
-import { logAuditEvent } from '../middleware/audit.js';
-export async function requestVerification(req, res) {
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.requestVerification = requestVerification;
+exports.getVerificationQueue = getVerificationQueue;
+exports.reviewVerification = reviewVerification;
+const uuid_1 = require("uuid");
+const crypto_1 = __importDefault(require("crypto"));
+const db_js_1 = require("../db/db.js");
+const readinessCalculator_js_1 = require("../services/readinessCalculator.js");
+const audit_js_1 = require("../middleware/audit.js");
+async function requestVerification(req, res) {
     try {
         const { documentId } = req.body;
         const userId = req.user.id;
-        const docRes = await query(`SELECT * FROM documents WHERE id = $1 AND user_id = $2`, [documentId, userId]);
+        const docRes = await (0, db_js_1.query)(`SELECT * FROM documents WHERE id = $1 AND user_id = $2`, [documentId, userId]);
         if (docRes.rows.length === 0) {
             res.status(404).json({ error: 'Document not found in your vault.' });
             return;
         }
-        await query(`UPDATE documents SET verification_status = 'VERIFICATION_PENDING', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [documentId]);
+        await (0, db_js_1.query)(`UPDATE documents SET verification_status = 'VERIFICATION_PENDING', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [documentId]);
         const doc = docRes.rows[0];
         if (doc.journey_id && doc.requirement_id) {
-            await query(`UPDATE user_requirements SET status = 'VERIFICATION_PENDING', updated_at = CURRENT_TIMESTAMP
+            await (0, db_js_1.query)(`UPDATE user_requirements SET status = 'VERIFICATION_PENDING', updated_at = CURRENT_TIMESTAMP
          WHERE journey_id = $1 AND requirement_id = $2`, [doc.journey_id, doc.requirement_id]);
         }
-        await logAuditEvent({
+        await (0, audit_js_1.logAuditEvent)({
             userId,
             action: 'VERIFICATION_REQUESTED',
             actorRole: req.user.role,
@@ -36,10 +44,10 @@ export async function requestVerification(req, res) {
         res.status(500).json({ error: 'Failed to submit document for verification.' });
     }
 }
-export async function getVerificationQueue(req, res) {
+async function getVerificationQueue(req, res) {
     try {
         // Accessible by AUTHORITY, VERIFIER, and ADMIN
-        const result = await query(`SELECT d.*, u.email as user_email, p.full_name as user_full_name, p.nationality, p.destination_country,
+        const result = await (0, db_js_1.query)(`SELECT d.*, u.email as user_email, p.full_name as user_full_name, p.nationality, p.destination_country,
               j.from_country, j.to_country, j.purpose
        FROM documents d
        JOIN users u ON d.user_id = u.id
@@ -57,7 +65,7 @@ export async function getVerificationQueue(req, res) {
         res.status(500).json({ error: 'Failed to retrieve verification queue.' });
     }
 }
-export async function reviewVerification(req, res) {
+async function reviewVerification(req, res) {
     try {
         const { documentId, status, reason } = req.body; // status: 'VERIFIED', 'REJECTED', 'NEEDS_REVIEW'
         const verifierId = req.user.id;
@@ -66,7 +74,7 @@ export async function reviewVerification(req, res) {
             res.status(400).json({ error: 'Invalid verification decision status.' });
             return;
         }
-        const docRes = await query(`SELECT * FROM documents WHERE id = $1`, [documentId]);
+        const docRes = await (0, db_js_1.query)(`SELECT * FROM documents WHERE id = $1`, [documentId]);
         if (docRes.rows.length === 0) {
             res.status(404).json({ error: 'Target document not found.' });
             return;
@@ -74,25 +82,25 @@ export async function reviewVerification(req, res) {
         const doc = docRes.rows[0];
         // Compute cryptographic digital signature of the approval
         const sigPayload = `${doc.id}:${doc.file_hash}:${verifierId}:${status}:${Date.now()}`;
-        const signatureHash = crypto.createHash('sha256').update(sigPayload).digest('hex');
-        const verifId = uuidv4();
-        await query(`INSERT INTO document_verifications (id, document_id, verifier_id, verifier_role, status, reason, signature_hash)
+        const signatureHash = crypto_1.default.createHash('sha256').update(sigPayload).digest('hex');
+        const verifId = (0, uuid_1.v4)();
+        await (0, db_js_1.query)(`INSERT INTO document_verifications (id, document_id, verifier_id, verifier_role, status, reason, signature_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`, [verifId, documentId, verifierId, verifierRole, status, reason || 'Document authenticity verified by competent authority.', signatureHash]);
         // Update document status
-        await query(`UPDATE documents SET verification_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [status, documentId]);
+        await (0, db_js_1.query)(`UPDATE documents SET verification_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [status, documentId]);
         // Update requirement status if linked
         if (doc.journey_id && doc.requirement_id) {
-            await query(`UPDATE user_requirements SET status = $1, updated_at = CURRENT_TIMESTAMP
+            await (0, db_js_1.query)(`UPDATE user_requirements SET status = $1, updated_at = CURRENT_TIMESTAMP
          WHERE journey_id = $2 AND requirement_id = $3`, [status, doc.journey_id, doc.requirement_id]);
         }
         // Recalculate journey readiness
         let readiness = null;
         if (doc.journey_id) {
-            readiness = await calculateJourneyReadiness(doc.journey_id);
+            readiness = await (0, readinessCalculator_js_1.calculateJourneyReadiness)(doc.journey_id);
         }
         // Create user in-app notification
-        const notifId = uuidv4();
-        await query(`INSERT INTO notifications (id, user_id, title, message, category, link_url)
+        const notifId = (0, uuid_1.v4)();
+        await (0, db_js_1.query)(`INSERT INTO notifications (id, user_id, title, message, category, link_url)
        VALUES ($1, $2, $3, $4, $5, $6)`, [
             notifId,
             doc.user_id,
@@ -101,7 +109,7 @@ export async function reviewVerification(req, res) {
             'VERIFICATION_RESULT',
             '/verification'
         ]);
-        await logAuditEvent({
+        await (0, audit_js_1.logAuditEvent)({
             userId: verifierId,
             action: `DOCUMENT_VERIFICATION_${status}`,
             actorRole: verifierRole,

@@ -1,25 +1,28 @@
-import { query } from '../db/db.js';
-export async function calculateJourneyReadiness(journeyId) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.calculateJourneyReadiness = calculateJourneyReadiness;
+const db_js_1 = require("../db/db.js");
+async function calculateJourneyReadiness(journeyId) {
     // 1. Fetch journey details
-    const journeyRes = await query(`SELECT * FROM journeys WHERE id = $1`, [journeyId]);
+    const journeyRes = await (0, db_js_1.query)(`SELECT * FROM journeys WHERE id = $1`, [journeyId]);
     if (journeyRes.rows.length === 0) {
         throw new Error('Journey not found');
     }
     const journey = journeyRes.rows[0];
     const userId = journey.user_id;
     // 2. Fetch user requirements
-    const userReqsResult = await query(`SELECT ur.*, r.category, r.title, r.mandatory, r.stage_number
+    const userReqsResult = await (0, db_js_1.query)(`SELECT ur.*, r.category, r.title, r.mandatory, r.stage_number
      FROM user_requirements ur
      JOIN requirements r ON ur.requirement_id = r.id
      WHERE ur.journey_id = $1`, [journeyId]);
     // 3. Fetch documents in vault
-    const docsResult = await query(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
+    const docsResult = await (0, db_js_1.query)(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
     // 4. Fetch health documents
-    const healthResult = await query(`SELECT * FROM health_documents WHERE user_id = $1`, [userId]);
+    const healthResult = await (0, db_js_1.query)(`SELECT * FROM health_documents WHERE user_id = $1`, [userId]);
     // 5. Fetch cost plan & funding
-    const planResult = await query(`SELECT * FROM cost_plans WHERE user_id = $1`, [userId]);
+    const planResult = await (0, db_js_1.query)(`SELECT * FROM cost_plans WHERE user_id = $1`, [userId]);
     // 6. Fetch journey stages
-    const stagesResult = await query(`SELECT * FROM journey_stages WHERE journey_id = $1 ORDER BY stage_number ASC`, [journeyId]);
+    const stagesResult = await (0, db_js_1.query)(`SELECT * FROM journey_stages WHERE journey_id = $1 ORDER BY stage_number ASC`, [journeyId]);
     const reqs = userReqsResult.rows;
     const docs = docsResult.rows;
     const healthDocs = healthResult.rows;
@@ -64,7 +67,7 @@ export async function calculateJourneyReadiness(journeyId) {
     // ==========================================
     let financialScore = 40;
     if (plan) {
-        const itemsRes = await query(`SELECT estimated_amount, timing FROM cost_items WHERE plan_id = $1`, [plan.id]);
+        const itemsRes = await (0, db_js_1.query)(`SELECT estimated_amount, timing FROM cost_items WHERE plan_id = $1`, [plan.id]);
         let totalTarget = 0;
         for (const it of itemsRes.rows) {
             const amt = parseFloat(it.estimated_amount) || 0;
@@ -72,7 +75,7 @@ export async function calculateJourneyReadiness(journeyId) {
                 totalTarget += amt;
             }
         }
-        const fundRes = await query(`SELECT amount FROM funding_sources WHERE plan_id = $1 AND status = 'AWARDED_CONFIRMED'`, [plan.id]);
+        const fundRes = await (0, db_js_1.query)(`SELECT amount FROM funding_sources WHERE plan_id = $1 AND status = 'AWARDED_CONFIRMED'`, [plan.id]);
         let confirmed = 0;
         for (const f of fundRes.rows) {
             confirmed += parseFloat(f.amount) || 0;
@@ -139,7 +142,7 @@ export async function calculateJourneyReadiness(journeyId) {
         nextAction = 'All core readiness criteria satisfied. Ready for international departure.';
     }
     // Persist updated score
-    await query(`UPDATE journeys SET readiness_score = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [overall, journeyId]);
+    await (0, db_js_1.query)(`UPDATE journeys SET readiness_score = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [overall, journeyId]);
     return {
         overallScore: overall,
         categories: {

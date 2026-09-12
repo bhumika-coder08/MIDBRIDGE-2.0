@@ -1,8 +1,17 @@
-import { v4 as uuidv4 } from 'uuid';
-import crypto from 'crypto';
-import { query } from '../db/db.js';
-import { logAuditEvent } from '../middleware/audit.js';
-export async function createSharePackage(req, res) {
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createSharePackage = createSharePackage;
+exports.getUserSharePackages = getUserSharePackages;
+exports.revokeSharePackage = revokeSharePackage;
+exports.getPublicSharePackageByToken = getPublicSharePackageByToken;
+const uuid_1 = require("uuid");
+const crypto_1 = __importDefault(require("crypto"));
+const db_js_1 = require("../db/db.js");
+const audit_js_1 = require("../middleware/audit.js");
+async function createSharePackage(req, res) {
     try {
         const userId = req.user.id;
         const { documentIds, recipientName, recipientEmail, allowDownload, expiryDays = 7, notes } = req.body;
@@ -15,21 +24,21 @@ export async function createSharePackage(req, res) {
             return;
         }
         // Verify all document IDs belong to the user
-        const userDocs = await query(`SELECT id FROM documents WHERE user_id = $1 AND id = ANY($2::text[])`, [userId, documentIds]);
+        const userDocs = await (0, db_js_1.query)(`SELECT id FROM documents WHERE user_id = $1 AND id = ANY($2::text[])`, [userId, documentIds]);
         if (userDocs.rows.length !== documentIds.length) {
             res.status(403).json({ error: 'One or more selected documents are unauthorized or do not exist.' });
             return;
         }
-        const packageId = uuidv4();
-        const shareToken = `cls_${crypto.randomBytes(16).toString('hex')}`;
+        const packageId = (0, uuid_1.v4)();
+        const shareToken = `cls_${crypto_1.default.randomBytes(16).toString('hex')}`;
         const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
-        await query(`INSERT INTO share_packages (id, user_id, share_token, recipient_name, recipient_email, allow_download, expires_at, notes)
+        await (0, db_js_1.query)(`INSERT INTO share_packages (id, user_id, share_token, recipient_name, recipient_email, allow_download, expires_at, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [packageId, userId, shareToken, recipientName, recipientEmail || null, !!allowDownload, expiresAt, notes || null]);
         for (const docId of documentIds) {
-            const linkId = uuidv4();
-            await query(`INSERT INTO share_package_documents (id, share_package_id, document_id) VALUES ($1, $2, $3)`, [linkId, packageId, docId]);
+            const linkId = (0, uuid_1.v4)();
+            await (0, db_js_1.query)(`INSERT INTO share_package_documents (id, share_package_id, document_id) VALUES ($1, $2, $3)`, [linkId, packageId, docId]);
         }
-        await logAuditEvent({
+        await (0, audit_js_1.logAuditEvent)({
             userId,
             action: 'SHARE_PACKAGE_CREATED',
             actorRole: req.user.role,
@@ -51,10 +60,10 @@ export async function createSharePackage(req, res) {
         res.status(500).json({ error: 'Failed to create selective disclosure package.' });
     }
 }
-export async function getUserSharePackages(req, res) {
+async function getUserSharePackages(req, res) {
     try {
         const userId = req.user.id;
-        const pkgsRes = await query(`SELECT sp.*, COUNT(spd.document_id) as document_count
+        const pkgsRes = await (0, db_js_1.query)(`SELECT sp.*, COUNT(spd.document_id) as document_count
        FROM share_packages sp
        LEFT JOIN share_package_documents spd ON sp.id = spd.share_package_id
        WHERE sp.user_id = $1
@@ -66,12 +75,12 @@ export async function getUserSharePackages(req, res) {
         res.status(500).json({ error: 'Failed to retrieve your active share packages.' });
     }
 }
-export async function revokeSharePackage(req, res) {
+async function revokeSharePackage(req, res) {
     try {
         const { id } = req.params;
         const userId = req.user.id;
-        await query(`UPDATE share_packages SET is_revoked = true WHERE id = $1 AND user_id = $2`, [id, userId]);
-        await logAuditEvent({
+        await (0, db_js_1.query)(`UPDATE share_packages SET is_revoked = true WHERE id = $1 AND user_id = $2`, [id, userId]);
+        await (0, audit_js_1.logAuditEvent)({
             userId,
             action: 'SHARE_PACKAGE_REVOKED',
             actorRole: req.user.role,
@@ -85,10 +94,10 @@ export async function revokeSharePackage(req, res) {
         res.status(500).json({ error: 'Failed to revoke package.' });
     }
 }
-export async function getPublicSharePackageByToken(req, res) {
+async function getPublicSharePackageByToken(req, res) {
     try {
         const { token } = req.params;
-        const pkgRes = await query(`SELECT sp.*, p.full_name as user_name, p.nationality
+        const pkgRes = await (0, db_js_1.query)(`SELECT sp.*, p.full_name as user_name, p.nationality
        FROM share_packages sp
        JOIN users u ON sp.user_id = u.id
        LEFT JOIN profiles p ON u.id = p.user_id
@@ -107,11 +116,11 @@ export async function getPublicSharePackageByToken(req, res) {
             return;
         }
         // Retrieve ONLY the authorized documents linked to this share package
-        const docsRes = await query(`SELECT d.id, d.category, d.original_name, d.file_size, d.file_hash, d.verification_status, d.issuer, d.issue_date, d.expiry_date, d.created_at
+        const docsRes = await (0, db_js_1.query)(`SELECT d.id, d.category, d.original_name, d.file_size, d.file_hash, d.verification_status, d.issuer, d.issue_date, d.expiry_date, d.created_at
        FROM documents d
        JOIN share_package_documents spd ON d.id = spd.document_id
        WHERE spd.share_package_id = $1`, [pkg.id]);
-        await logAuditEvent({
+        await (0, audit_js_1.logAuditEvent)({
             userId: pkg.user_id,
             action: 'SHARE_PACKAGE_ACCESSED',
             actorRole: 'VERIFIER',
