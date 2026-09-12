@@ -94,8 +94,7 @@ const isServerless = Boolean(
 // Only listen if executed directly from CLI and not in serverless runtime
 const isDirectRun =
   !isServerless &&
-  ((typeof require !== 'undefined' && require.main === module) ||
-    Boolean(process.argv[1] && (process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.js'))));
+  Boolean(process.argv[1] && (process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.js')));
 
 if (isDirectRun) {
   async function startServer() {
@@ -119,10 +118,3 @@ if (isDirectRun) {
 
 export { app };
 export default app;
-
-// Ensure CommonJS module.exports compatibility for AWS Lambda / Vercel Serverless Function bridges
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = app;
-  module.exports.default = app;
-  module.exports.app = app;
-}

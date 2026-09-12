@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { initDatabase, query } from './db.js';
 import { schemaSql } from './schemaSql.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function runMigrations(): Promise<void> {
   await initDatabase();

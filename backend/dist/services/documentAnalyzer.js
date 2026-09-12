@@ -1,17 +1,10 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.computeFileHash = computeFileHash;
-exports.analyzeUploadedDocument = analyzeUploadedDocument;
-const crypto_1 = __importDefault(require("crypto"));
-const fs_1 = __importDefault(require("fs"));
-function computeFileHash(filePath) {
-    const fileBuffer = fs_1.default.readFileSync(filePath);
-    return crypto_1.default.createHash('sha256').update(fileBuffer).digest('hex');
+import crypto from 'crypto';
+import fs from 'fs';
+export function computeFileHash(filePath) {
+    const fileBuffer = fs.readFileSync(filePath);
+    return crypto.createHash('sha256').update(fileBuffer).digest('hex');
 }
-async function analyzeUploadedDocument(filePath, originalName, category, userName) {
+export async function analyzeUploadedDocument(filePath, originalName, category, userName) {
     const hash = computeFileHash(filePath);
     const lowerName = originalName.toLowerCase();
     let classification = 'Standard Identification Record';

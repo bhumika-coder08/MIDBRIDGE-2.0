@@ -1,35 +1,31 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.assembleUserContext = assembleUserContext;
-exports.generateAssistantResponse = generateAssistantResponse;
-const db_js_1 = require("../db/db.js");
-async function assembleUserContext(userId) {
-    const journeys = await (0, db_js_1.query)(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
+import { query } from '../db/db.js';
+export async function assembleUserContext(userId) {
+    const journeys = await query(`SELECT * FROM journeys WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
     const journey = journeys.rows[0] || null;
     let requirements = [];
     let country = null;
     let scholarships = [];
     if (journey) {
-        const reqsRes = await (0, db_js_1.query)(`SELECT ur.*, r.category, r.title, r.description, r.mandatory, r.stage_number
+        const reqsRes = await query(`SELECT ur.*, r.category, r.title, r.description, r.mandatory, r.stage_number
        FROM user_requirements ur
        JOIN requirements r ON ur.requirement_id = r.id
        WHERE ur.journey_id = $1`, [journey.id]);
         requirements = reqsRes.rows;
-        const countryRes = await (0, db_js_1.query)(`SELECT * FROM countries WHERE name = $1 OR code = $1`, [journey.to_country]);
+        const countryRes = await query(`SELECT * FROM countries WHERE name = $1 OR code = $1`, [journey.to_country]);
         country = countryRes.rows[0] || null;
-        const schRes = await (0, db_js_1.query)(`SELECT * FROM scholarships WHERE country_code = $1 LIMIT 5`, [country ? country.code : 'DE']);
+        const schRes = await query(`SELECT * FROM scholarships WHERE country_code = $1 LIMIT 5`, [country ? country.code : 'DE']);
         scholarships = schRes.rows;
     }
-    const docsRes = await (0, db_js_1.query)(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
-    const healthDocsRes = await (0, db_js_1.query)(`SELECT * FROM health_documents WHERE user_id = $1`, [userId]);
-    const planRes = await (0, db_js_1.query)(`SELECT * FROM cost_plans WHERE user_id = $1`, [userId]);
+    const docsRes = await query(`SELECT * FROM documents WHERE user_id = $1`, [userId]);
+    const healthDocsRes = await query(`SELECT * FROM health_documents WHERE user_id = $1`, [userId]);
+    const planRes = await query(`SELECT * FROM cost_plans WHERE user_id = $1`, [userId]);
     const costPlan = planRes.rows[0] || null;
     let costItems = [];
     let fundingSources = [];
     if (costPlan) {
-        const itemsRes = await (0, db_js_1.query)(`SELECT * FROM cost_items WHERE plan_id = $1`, [costPlan.id]);
+        const itemsRes = await query(`SELECT * FROM cost_items WHERE plan_id = $1`, [costPlan.id]);
         costItems = itemsRes.rows;
-        const fundRes = await (0, db_js_1.query)(`SELECT * FROM funding_sources WHERE plan_id = $1`, [costPlan.id]);
+        const fundRes = await query(`SELECT * FROM funding_sources WHERE plan_id = $1`, [costPlan.id]);
         fundingSources = fundRes.rows;
     }
     return {
@@ -46,7 +42,7 @@ async function assembleUserContext(userId) {
         scholarships,
     };
 }
-async function generateAssistantResponse(prompt, context) {
+export async function generateAssistantResponse(prompt, context) {
     const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
     // External API integration if API key configured
     if (apiKey && process.env.GEMINI_API_KEY) {

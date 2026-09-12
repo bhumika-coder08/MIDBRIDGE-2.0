@@ -1,28 +1,25 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.runMigrations = runMigrations;
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
-const db_js_1 = require("./db.js");
-const schemaSql_js_1 = require("./schemaSql.js");
-async function runMigrations() {
-    await (0, db_js_1.initDatabase)();
-    let sql = schemaSql_js_1.schemaSql;
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { initDatabase, query } from './db.js';
+import { schemaSql } from './schemaSql.js';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+export async function runMigrations() {
+    await initDatabase();
+    let sql = schemaSql;
     if (!sql) {
         const candidates = [
-            path_1.default.resolve(__dirname, 'schema.sql'),
-            path_1.default.resolve(__dirname, '..', '..', 'src', 'db', 'schema.sql'),
-            path_1.default.resolve(process.cwd(), 'src', 'db', 'schema.sql'),
-            path_1.default.resolve(process.cwd(), 'dist', 'db', 'schema.sql'),
-            path_1.default.resolve(process.cwd(), 'backend', 'src', 'db', 'schema.sql'),
-            path_1.default.resolve(process.cwd(), 'backend', 'dist', 'db', 'schema.sql'),
+            path.resolve(__dirname, 'schema.sql'),
+            path.resolve(__dirname, '..', '..', 'src', 'db', 'schema.sql'),
+            path.resolve(process.cwd(), 'src', 'db', 'schema.sql'),
+            path.resolve(process.cwd(), 'dist', 'db', 'schema.sql'),
+            path.resolve(process.cwd(), 'backend', 'src', 'db', 'schema.sql'),
+            path.resolve(process.cwd(), 'backend', 'dist', 'db', 'schema.sql'),
         ];
         for (const candidate of candidates) {
-            if (fs_1.default.existsSync(candidate)) {
-                sql = fs_1.default.readFileSync(candidate, 'utf8');
+            if (fs.existsSync(candidate)) {
+                sql = fs.readFileSync(candidate, 'utf8');
                 break;
             }
         }
@@ -34,7 +31,7 @@ async function runMigrations() {
         .filter(s => s.length > 0);
     for (const statement of statements) {
         try {
-            await (0, db_js_1.query)(statement);
+            await query(statement);
         }
         catch (err) {
             // Ignore if table/index already exists

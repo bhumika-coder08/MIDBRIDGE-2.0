@@ -4,8 +4,12 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 
+import { fileURLToPath } from 'url';
+
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const backendRootDir = path.resolve(__dirname, '..', '..');
 
 export interface QueryResult<T = any> {
@@ -120,7 +124,7 @@ export async function initDatabase(): Promise<void> {
 
       if (!hasTables) {
         console.log('[DB-INIT] Required tables missing. Running automatic migrations and seed...');
-        const { seedDatabase } = require('./seed.js');
+        const { seedDatabase } = await import('./seed.js');
         await seedDatabase();
         console.log('✓ [DB-INIT] Database schema and initial data auto-bootstrapped successfully.');
       } else {

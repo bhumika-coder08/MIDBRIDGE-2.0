@@ -1,21 +1,11 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.signup = signup;
-exports.login = login;
-exports.getMe = getMe;
-exports.updateProfile = updateProfile;
-exports.adminLogin = adminLogin;
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const uuid_1 = require("uuid");
-const db_js_1 = require("../db/db.js");
-const audit_js_1 = require("../middleware/audit.js");
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
+import { query } from '../db/db.js';
+import { logAuditEvent } from '../middleware/audit.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'midbridge_jwt_super_secret_production_key_2026_9831a';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
-async function signup(req, res) {
+export async function signup(req, res) {
     console.log('[AUTH-SIGNUP] Incoming registration attempt for role:', req.body?.role || 'USER');
     try {
         const { email, password, fullName, nationality, destinationCountry, purpose, role } = req.body;
@@ -26,7 +16,7 @@ async function signup(req, res) {
         }
         // Check if user already exists
         console.log('[AUTH-SIGNUP] Querying existing user email...');
-        const existing = await (0, db_js_1.query)(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
+        const existing = await query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (existing.rows.length > 0) {
             console.log('[AUTH-SIGNUP] Account already exists for email');
             res.status(409).json({ error: 'An account with this email address already exists. Please log in.' });
@@ -34,16 +24,16 @@ async function signup(req, res) {
         }
         const assignedRole = ['ADMIN', 'AUTHORITY', 'UNIVERSITY', 'VERIFIER'].includes(role) ? role : 'USER';
         console.log('[AUTH-SIGNUP] Hashing password with bcrypt...');
-        const passwordHash = await bcryptjs_1.default.hash(password, 10);
-        const userId = (0, uuid_1.v4)();
+        const passwordHash = await bcrypt.hash(password, 10);
+        const userId = uuidv4();
         console.log('[AUTH-SIGNUP] Inserting new user record...');
-        await (0, db_js_1.query)(`INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, $3, $4)`, [userId, email.toLowerCase().trim(), passwordHash, assignedRole]);
-        const profileId = (0, uuid_1.v4)();
+        await query(`INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, $3, $4)`, [userId, email.toLowerCase().trim(), passwordHash, assignedRole]);
+        const profileId = uuidv4();
         console.log('[AUTH-SIGNUP] Inserting new user profile...');
-        await (0, db_js_1.query)(`INSERT INTO profiles (id, user_id, full_name, nationality, current_country, destination_country, purpose)
+        await query(`INSERT INTO profiles (id, user_id, full_name, nationality, current_country, destination_country, purpose)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`, [profileId, userId, fullName.trim(), nationality || 'India', nationality || 'India', destinationCountry || 'Germany', purpose || 'Study']);
         try {
-            await (0, audit_js_1.logAuditEvent)({
+            await logAuditEvent({
                 userId,
                 action: 'USER_REGISTERED',
                 actorRole: assignedRole,
@@ -56,7 +46,7 @@ async function signup(req, res) {
             console.warn('[AUTH-SIGNUP] Audit log notice:', auditErr.message);
         }
         console.log('[AUTH-SIGNUP] Generating JWT session token...');
-        const token = jsonwebtoken_1.default.sign({ id: userId, email: email.toLowerCase().trim(), role: assignedRole }, JWT_SECRET, {
+        const token = jwt.sign({ id: userId, email: email.toLowerCase().trim(), role: assignedRole }, JWT_SECRET, {
             expiresIn: JWT_EXPIRES_IN,
         });
         console.log('✓ [AUTH-SIGNUP] User successfully registered with ID:', userId);
@@ -79,30 +69,30 @@ async function signup(req, res) {
         });
     }
 }
-async function login(req, res) {
+export async function login(req, res) {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
             res.status(400).json({ error: 'Please enter your email and password.' });
             return;
         }
-        const userRes = await (0, db_js_1.query)(`SELECT * FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
+        const userRes = await query(`SELECT * FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (userRes.rows.length === 0) {
             res.status(401).json({ error: 'Invalid email address or password.' });
             return;
         }
         const user = userRes.rows[0];
-        const match = await bcryptjs_1.default.compare(password, user.password_hash);
+        const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
             res.status(401).json({ error: 'Invalid email address or password.' });
             return;
         }
-        const profileRes = await (0, db_js_1.query)(`SELECT * FROM profiles WHERE user_id = $1`, [user.id]);
+        const profileRes = await query(`SELECT * FROM profiles WHERE user_id = $1`, [user.id]);
         const profile = profileRes.rows[0] || null;
-        const token = jsonwebtoken_1.default.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
             expiresIn: JWT_EXPIRES_IN,
         });
-        await (0, audit_js_1.logAuditEvent)({
+        await logAuditEvent({
             userId: user.id,
             action: 'USER_LOGIN',
             actorRole: user.role,
@@ -127,16 +117,16 @@ async function login(req, res) {
         res.status(500).json({ error: 'Authentication failed. Please verify your credentials and try again.' });
     }
 }
-async function getMe(req, res) {
+export async function getMe(req, res) {
     try {
         const userId = req.user.id;
-        const userRes = await (0, db_js_1.query)(`SELECT id, email, role, created_at FROM users WHERE id = $1`, [userId]);
+        const userRes = await query(`SELECT id, email, role, created_at FROM users WHERE id = $1`, [userId]);
         if (userRes.rows.length === 0) {
             res.status(404).json({ error: 'User profile not found.' });
             return;
         }
         const user = userRes.rows[0];
-        const profileRes = await (0, db_js_1.query)(`SELECT * FROM profiles WHERE user_id = $1`, [userId]);
+        const profileRes = await query(`SELECT * FROM profiles WHERE user_id = $1`, [userId]);
         const profile = profileRes.rows[0] || null;
         res.json({
             user: {
@@ -149,11 +139,11 @@ async function getMe(req, res) {
         res.status(500).json({ error: 'Failed to retrieve profile data.' });
     }
 }
-async function updateProfile(req, res) {
+export async function updateProfile(req, res) {
     try {
         const userId = req.user.id;
         const { fullName, nationality, currentCountry, destinationCountry, purpose, educationLevel, intendedCourse, institution, travelDate, preferredLanguage, } = req.body;
-        await (0, db_js_1.query)(`UPDATE profiles SET
+        await query(`UPDATE profiles SET
         full_name = COALESCE($1, full_name),
         nationality = COALESCE($2, nationality),
         current_country = COALESCE($3, current_country),
@@ -178,7 +168,7 @@ async function updateProfile(req, res) {
             preferredLanguage,
             userId,
         ]);
-        const updated = await (0, db_js_1.query)(`SELECT * FROM profiles WHERE user_id = $1`, [userId]);
+        const updated = await query(`SELECT * FROM profiles WHERE user_id = $1`, [userId]);
         res.json({
             message: 'Profile updated successfully.',
             profile: updated.rows[0],
@@ -188,27 +178,27 @@ async function updateProfile(req, res) {
         res.status(500).json({ error: 'Failed to update profile.' });
     }
 }
-async function adminLogin(req, res) {
+export async function adminLogin(req, res) {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
             res.status(400).json({ error: 'Please enter administrator email and password.' });
             return;
         }
-        const userRes = await (0, db_js_1.query)(`SELECT * FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
+        const userRes = await query(`SELECT * FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (userRes.rows.length === 0) {
             res.status(401).json({ error: 'Invalid administrative credentials.' });
             return;
         }
         const user = userRes.rows[0];
-        const match = await bcryptjs_1.default.compare(password, user.password_hash);
+        const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
             res.status(401).json({ error: 'Invalid administrative credentials.' });
             return;
         }
         // Explicit Backend RBAC check: Must be ADMIN
         if (user.role !== 'ADMIN') {
-            await (0, audit_js_1.logAuditEvent)({
+            await logAuditEvent({
                 userId: user.id,
                 action: 'UNAUTHORIZED_ADMIN_PORTAL_ATTEMPT',
                 actorRole: user.role,
@@ -223,12 +213,12 @@ async function adminLogin(req, res) {
             });
             return;
         }
-        const profileRes = await (0, db_js_1.query)(`SELECT * FROM profiles WHERE user_id = $1`, [user.id]);
+        const profileRes = await query(`SELECT * FROM profiles WHERE user_id = $1`, [user.id]);
         const profile = profileRes.rows[0] || null;
-        const token = jsonwebtoken_1.default.sign({ id: user.id, email: user.email, role: 'ADMIN' }, JWT_SECRET, {
+        const token = jwt.sign({ id: user.id, email: user.email, role: 'ADMIN' }, JWT_SECRET, {
             expiresIn: JWT_EXPIRES_IN,
         });
-        await (0, audit_js_1.logAuditEvent)({
+        await logAuditEvent({
             userId: user.id,
             action: 'ADMIN_LOGIN_SUCCESS',
             actorRole: 'ADMIN',

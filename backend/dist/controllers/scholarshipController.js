@@ -1,8 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getScholarships = getScholarships;
-const db_js_1 = require("../db/db.js");
-async function getScholarships(req, res) {
+import { query } from '../db/db.js';
+export async function getScholarships(req, res) {
     try {
         const { country, level, funding } = req.query;
         let sql = `SELECT s.*, c.name as country_name, c.flag_emoji
@@ -23,7 +20,7 @@ async function getScholarships(req, res) {
             sql += ` AND LOWER(s.funding_type) LIKE LOWER($${params.length})`;
         }
         sql += ` ORDER BY s.deadline ASC`;
-        const result = await (0, db_js_1.query)(sql, params);
+        const result = await query(sql, params);
         res.json({ scholarships: result.rows });
     }
     catch (err) {

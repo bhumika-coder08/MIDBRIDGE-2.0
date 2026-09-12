@@ -1,6 +1,3 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.translateText = translateText;
 // Comprehensive cross-lingual lexicon for common official, academic, and travel mobility terms
 const mobilityLexicon = {
     de: {
@@ -146,7 +143,7 @@ const mobilityLexicon = {
         'thank you': 'धन्यवाद',
     }
 };
-async function translateText(req, res) {
+export async function translateText(req, res) {
     try {
         const { text, targetLang = 'de', sourceLang = 'auto' } = req.body;
         if (!text || text.trim().length === 0) {

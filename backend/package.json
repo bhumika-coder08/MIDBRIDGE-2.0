@@ -2,6 +2,7 @@
   "name": "midbridge-backend",
   "version": "2.0.0",
   "description": "MidBridge 2.0 Backend API Server",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

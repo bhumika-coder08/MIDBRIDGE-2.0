@@ -1,17 +1,11 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedDatabase = seedDatabase;
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const uuid_1 = require("uuid");
-const db_js_1 = require("./db.js");
-const migrate_js_1 = require("./migrate.js");
-async function seedDatabase() {
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+import { query } from './db.js';
+import { runMigrations } from './migrate.js';
+export async function seedDatabase() {
     console.log('Seeding MidBridge 2.0 database...');
-    await (0, migrate_js_1.runMigrations)();
-    const passwordHash = await bcryptjs_1.default.hash('Password123!', 10);
+    await runMigrations();
+    const passwordHash = await bcrypt.hash('Password123!', 10);
     // 1. Seed Demo Users for all roles
     const users = [
         { id: 'usr-demo-001', email: 'user@midbridge.io', role: 'USER', name: 'Aarav Patel', nat: 'India', cur: 'India', dest: 'Germany', purp: 'Study' },
@@ -21,13 +15,13 @@ async function seedDatabase() {
         { id: 'usr-verif-001', email: 'verifier@midbridge.io', role: 'VERIFIER', name: 'MidBridge 2.0 Identity Verification Hub', nat: 'United Kingdom', cur: 'United Kingdom', dest: 'United Kingdom', purp: 'Immigration' },
     ];
     await Promise.all(users.map(async (u) => {
-        await (0, db_js_1.query)(`INSERT INTO users (id, email, password_hash, role)
+        await query(`INSERT INTO users (id, email, password_hash, role)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (id) DO UPDATE SET email = $2, password_hash = $3, role = $4`, [u.id, u.email, passwordHash, u.role]);
-        await (0, db_js_1.query)(`INSERT INTO profiles (id, user_id, full_name, nationality, current_country, destination_country, purpose, education_level, intended_course, institution, travel_date, preferred_language)
+        await query(`INSERT INTO profiles (id, user_id, full_name, nationality, current_country, destination_country, purpose, education_level, intended_course, institution, travel_date, preferred_language)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (user_id) DO UPDATE SET full_name = $3, nationality = $4, current_country = $5, destination_country = $6, purpose = $7`, [
-            (0, uuid_1.v4)(),
+            uuidv4(),
             u.id,
             u.name,
             u.nat,
@@ -65,7 +59,7 @@ async function seedDatabase() {
         { code: 'IN', name: 'India', region: 'Asia', flag: '🇮🇳', img: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1200&q=80', purposes: ['Study', 'Research', 'Exchange', 'Travel'], summary: 'World\'s fastest-growing major economy, premier technical institutes (IITs, IIMs), vibrant startup ecosystem, and Study in India programs.', weeks: 3, curr: 'INR (₹)', lang: 'Hindi / English' },
     ];
     await Promise.all(countries.map(async (c) => {
-        await (0, db_js_1.query)(`INSERT INTO countries (code, name, region, flag_emoji, cover_image, popular_purposes, summary, processing_time_weeks, currency, language)
+        await query(`INSERT INTO countries (code, name, region, flag_emoji, cover_image, popular_purposes, summary, processing_time_weeks, currency, language)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (code) DO UPDATE SET name = $2, region = $3, flag_emoji = $4, cover_image = $5, popular_purposes = $6, summary = $7, processing_time_weeks = $8, currency = $9, language = $10`, [c.code, c.name, c.region, c.flag, c.img, JSON.stringify(c.purposes), c.summary, c.weeks, c.curr, c.lang]);
         // Seed structured content for each country
@@ -122,7 +116,7 @@ async function seedDatabase() {
         ];
         await Promise.all(contentSections.map(async (sec) => {
             const secId = `cnt-${c.code.toLowerCase()}-${sec.cat}`;
-            await (0, db_js_1.query)(`INSERT INTO country_content (id, country_code, category, title, content, source_organization, source_url, last_checked)
+            await query(`INSERT INTO country_content (id, country_code, category, title, content, source_organization, source_url, last_checked)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (id) DO UPDATE SET title = $4, content = $5, source_organization = $6, source_url = $7, last_checked = $8`, [secId, c.code, sec.cat, sec.title, sec.content, sec.org, sec.url, '2026-03-01']);
         }));
@@ -143,7 +137,7 @@ async function seedDatabase() {
         { id: 'sch-nz-manaaki', name: 'Manaaki New Zealand Scholarships', code: 'NZ', prov: 'Ministry of Foreign Affairs and Trade (MFAT)', lvl: 'Postgraduate Diploma / Master / PhD', nat: '*', field: 'Climate Change, Food Security, Renewable Energy', fund: 'Full Tuition + Stipend', dl: '2026-02-28', desc: 'Full tuition fees, a living allowance of NZ$531 per week, establishment allowance, medical insurance, and return travel tickets.', src: 'https://www.nzscholarships.govt.nz/', check: '2026-01-20' },
     ];
     await Promise.all(scholarships.map(async (s) => {
-        await (0, db_js_1.query)(`INSERT INTO scholarships (id, name, country_code, provider, level, eligible_nationalities, field, funding_type, deadline, description, official_source, last_checked)
+        await query(`INSERT INTO scholarships (id, name, country_code, provider, level, eligible_nationalities, field, funding_type, deadline, description, official_source, last_checked)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (id) DO UPDATE SET name = $2, provider = $4, deadline = $9, description = $10, official_source = $11, last_checked = $12`, [s.id, s.name, s.code, s.prov, s.lvl, s.nat, s.field, s.fund, s.dl, s.desc, s.src, s.check]);
     }));
@@ -182,13 +176,13 @@ async function seedDatabase() {
         { id: 'req-ca-std-03', dest: 'CA', purp: 'Study', cat: 'Immigration', title: 'Study Permit Application Form (IMM 1294)', desc: 'Submitted via IRCC secure online portal with biometrics and upfront medical exam where applicable.', mand: true, stage: 7, url: 'https://ircc.canada.ca' },
     ];
     await Promise.all(requirementsData.map(async (r) => {
-        await (0, db_js_1.query)(`INSERT INTO requirements (id, nationality, destination, purpose, category, title, description, mandatory, stage_number, source_url, last_updated)
+        await query(`INSERT INTO requirements (id, nationality, destination, purpose, category, title, description, mandatory, stage_number, source_url, last_updated)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (id) DO UPDATE SET title = $6, description = $7, mandatory = $8, stage_number = $9, source_url = $10, last_updated = $11`, [r.id, null, r.dest, r.purp, r.cat, r.title, r.desc, r.mand, r.stage, r.url, '2026-03-01']);
     }));
     // 5. Seed a Demo Journey for user 'usr-demo-001' (India -> Germany -> Study)
     const journeyId = 'jrn-demo-001';
-    await (0, db_js_1.query)(`INSERT INTO journeys (id, user_id, from_country, to_country, purpose, current_stage_number, current_stage_name, readiness_score, notes)
+    await query(`INSERT INTO journeys (id, user_id, from_country, to_country, purpose, current_stage_number, current_stage_name, readiness_score, notes)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (id) DO UPDATE SET current_stage_number = $6, current_stage_name = $7, readiness_score = $8`, [journeyId, 'usr-demo-001', 'India', 'Germany', 'Study', 5, 'Documentation', 62, 'Enrolled for Winter Semester 2026 at TUM. APS certificate verified. Blocked account in setup.']);
     // 6. Seed 12 Journey Stages for the Demo Journey
@@ -208,7 +202,7 @@ async function seedDatabase() {
     ];
     await Promise.all(stages.map(async (st) => {
         const stId = `stg-${journeyId}-${st.num}`;
-        await (0, db_js_1.query)(`INSERT INTO journey_stages (id, journey_id, stage_number, stage_name, description, status)
+        await query(`INSERT INTO journey_stages (id, journey_id, stage_number, stage_name, description, status)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET stage_name = $4, description = $5, status = $6`, [stId, journeyId, st.num, st.name, st.desc, st.status]);
     }));
@@ -225,7 +219,7 @@ async function seedDatabase() {
             status = 'AI_ANALYZED';
         if (req.id === 'req-de-std-04')
             status = 'IN_PROGRESS';
-        await (0, db_js_1.query)(`INSERT INTO user_requirements (id, journey_id, requirement_id, status, notes)
+        await query(`INSERT INTO user_requirements (id, journey_id, requirement_id, status, notes)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE SET status = $4, notes = $5`, [urId, journeyId, req.id, status, 'Tracked through MidBridge 2.0 requirement engine']);
     }));
@@ -236,7 +230,7 @@ async function seedDatabase() {
         { id: 'notif-03', uid: 'usr-demo-001', title: 'DAAD EPOS Deadline Approaching', msg: 'The application window for DAAD EPOS closes on 31 October 2026.', cat: 'SCHOLARSHIP_REMINDER', link: '/scholarships' },
     ];
     await Promise.all(notifications.map(async (n) => {
-        await (0, db_js_1.query)(`INSERT INTO notifications (id, user_id, title, message, category, link_url)
+        await query(`INSERT INTO notifications (id, user_id, title, message, category, link_url)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`, [n.id, n.uid, n.title, n.msg, n.cat, n.link]);
     }));
@@ -246,7 +240,7 @@ async function seedDatabase() {
         { id: 'rem-03', uid: 'usr-demo-001', jid: journeyId, title: 'Techniker Krankenkasse (TK) Student Insurance Confirmation', date: '2026-07-15', cat: 'Insurance' },
     ];
     await Promise.all(reminders.map(async (rem) => {
-        await (0, db_js_1.query)(`INSERT INTO reminders (id, user_id, journey_id, title, due_date, category)
+        await query(`INSERT INTO reminders (id, user_id, journey_id, title, due_date, category)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`, [rem.id, rem.uid, rem.jid, rem.title, rem.date, rem.cat]);
     }));

@@ -1,23 +1,18 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.initDatabase = initDatabase;
-exports.query = query;
-exports.getActiveEngine = getActiveEngine;
-const pg_1 = require("pg");
-const pglite_1 = require("@electric-sql/pglite");
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-const backendRootDir = path_1.default.resolve(__dirname, '..', '..');
+import { Pool } from 'pg';
+import { PGlite } from '@electric-sql/pglite';
+import path from 'path';
+import fs from 'fs';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const backendRootDir = path.resolve(__dirname, '..', '..');
 let pgPool = null;
 let pgliteInstance = null;
 let activeEngine = 'pglite';
 let initPromise = null;
-async function initDatabase() {
+export async function initDatabase() {
     if (pgPool || pgliteInstance) {
         return;
     }
@@ -39,7 +34,7 @@ async function initDatabase() {
             try {
                 console.log('[DB-INIT] Connecting to PostgreSQL pool via DATABASE_URL...');
                 const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
-                const testPool = new pg_1.Pool({
+                const testPool = new Pool({
                     connectionString: databaseUrl,
                     connectionTimeoutMillis: 5000,
                     ssl: isLocalhost ? false : { rejectUnauthorized: false },
@@ -61,7 +56,7 @@ async function initDatabase() {
                 if (isServerless) {
                     // In serverless, use in-memory PGlite directly to prevent filesystem lock aborts
                     console.log('[DB-INIT] Initializing in-memory PGlite engine for serverless execution...');
-                    const memInstance = new pglite_1.PGlite();
+                    const memInstance = new PGlite();
                     await memInstance.waitReady;
                     pgliteInstance = memInstance;
                     activeEngine = 'pglite';
@@ -69,15 +64,15 @@ async function initDatabase() {
                 }
                 else {
                     // In local standalone dev, use persistent data folder
-                    const dataDir = path_1.default.resolve(backendRootDir, 'data', 'pglite');
+                    const dataDir = path.resolve(backendRootDir, 'data', 'pglite');
                     try {
-                        if (!fs_1.default.existsSync(dataDir)) {
-                            fs_1.default.mkdirSync(dataDir, { recursive: true });
+                        if (!fs.existsSync(dataDir)) {
+                            fs.mkdirSync(dataDir, { recursive: true });
                         }
                     }
                     catch { }
                     try {
-                        const instance = new pglite_1.PGlite(dataDir);
+                        const instance = new PGlite(dataDir);
                         await instance.waitReady;
                         pgliteInstance = instance;
                         activeEngine = 'pglite';
@@ -85,7 +80,7 @@ async function initDatabase() {
                     }
                     catch (persistErr) {
                         console.warn(`! [DB-INIT] Persistent PGlite warning: ${persistErr.message}, initializing in-memory`);
-                        const memInstance = new pglite_1.PGlite();
+                        const memInstance = new PGlite();
                         await memInstance.waitReady;
                         pgliteInstance = memInstance;
                         activeEngine = 'pglite';
@@ -116,7 +111,7 @@ async function initDatabase() {
             }
             if (!hasTables) {
                 console.log('[DB-INIT] Required tables missing. Running automatic migrations and seed...');
-                const { seedDatabase } = require('./seed.js');
+                const { seedDatabase } = await import('./seed.js');
                 await seedDatabase();
                 console.log('✓ [DB-INIT] Database schema and initial data auto-bootstrapped successfully.');
             }
@@ -136,7 +131,7 @@ async function initDatabase() {
         throw err;
     }
 }
-async function query(sql, params = []) {
+export async function query(sql, params = []) {
     if (activeEngine === 'pg' && pgPool) {
         const res = await pgPool.query(sql, params);
         return {
@@ -157,6 +152,6 @@ async function query(sql, params = []) {
     }
     throw new Error('No database engine initialized.');
 }
-function getActiveEngine() {
+export function getActiveEngine() {
     return activeEngine;
 }
